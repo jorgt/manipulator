@@ -8,9 +8,16 @@ Uses a promise to make all steps more transparant.
 
 Especially on larger images, this is not going to be fast. Look at the console to see progress. 
 
-Todo:
+Technical issues:
 - edge detection needs a bit of work. There seem to be occasional cells out of bounds.
+- determine the center of a cell
 - automaton smoothing, add cells pixels being 'born' also. 
+- optimize cell merging. cells should merge with either the largest neighbor or the neighbor closest in color. Haven't worked out yet how to determine neighboring cells.
+- Once everything is working, I might check run time. 
+
+Missing features:
+- ability to display colors used
+- ability to mark a cell with the number of the color used
 
 ## Example:
 
@@ -54,6 +61,8 @@ manipulator.then(function(image) {
 
 ## Outcomes
 
+*note*: Because k-means adds some randomness, and because the screenshots below are taken from different runs, they differ slightly in shapes and colors (beyond the effect demonstrated).
+
 The original. 
 
 ![Original](https://raw.githubusercontent.com/jorgt/manipulator/master/screenshots/1original.png)
@@ -66,7 +75,7 @@ Smoothed over once, this creates a layered effect
 
 ![smoothed](https://raw.githubusercontent.com/jorgt/manipulator/master/screenshots/3smoothed.png)
 
-Small cells are remove from the image
+Small cells are removed from the image and merged into larger ones
 
 ![median](https://raw.githubusercontent.com/jorgt/manipulator/master/screenshots/4smallcells.png)
 
