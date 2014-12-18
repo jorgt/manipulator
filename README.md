@@ -12,7 +12,7 @@ Todo:
 - edge detection needs a bit of work. There seem to be occasional cells out of bounds.
 - automaton smoothing, add cells pixels being 'born' also. 
 
-Example:
+## Example:
 
 ```javascript
 
@@ -51,3 +51,17 @@ manipulator.then(function(image) {
     console.log('... the end')
 })
 ```
+
+## Outcomes
+
+The original. 
+
+Brought back to 10 median colors
+
+Smoothed over once, this creates a layered effect
+
+Small cells are remove from the image
+
+Display borders
+
+Display borders only

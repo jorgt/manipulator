@@ -22,7 +22,7 @@
 				image.append();
 				return image;
 			}).then(function(image) {
-				image.kmeans(5, 0);
+				image.kmeans(10);
 				return image;
 			}).then(function(image) {
 				image.smoothing(1, 0);
@@ -31,10 +31,10 @@
 				image.mergeCells(3, 70)
 				return image;
 			}).then(function(image) {
-				image.mergeCells(2, 100)
+				//image.mergeCells(2, 100)
 				return image;
 			}).then(function(image) {
-				image.edges(false, [0,0,0])
+				image.edges(true, [0,0,0])
 				return image;
 			}).then(function(image) {
 				//image.smoothing(1, 6)
