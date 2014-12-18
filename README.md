@@ -55,13 +55,19 @@ manipulator.then(function(image) {
 ## Outcomes
 
 The original. 
+![Original](https://raw.githubusercontent.com/jorgt/manipulator/master/screenshots/1original.png)
 
 Brought back to 10 median colors
+![median](https://raw.githubusercontent.com/jorgt/manipulator/master/screenshots/2kmeans10.png)
 
 Smoothed over once, this creates a layered effect
+![smoothed](https://raw.githubusercontent.com/jorgt/manipulator/master/screenshots/3smoothed.png)
 
 Small cells are remove from the image
+![median](https://raw.githubusercontent.com/jorgt/manipulator/master/screenshots/4smallcells.png)
 
 Display borders
+![median](https://raw.githubusercontent.com/jorgt/manipulator/master/screenshots/5borders.png)
 
 Display borders only
+![median](https://raw.githubusercontent.com/jorgt/manipulator/master/screenshots/6bordersonly.png)
