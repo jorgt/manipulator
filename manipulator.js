@@ -1,6 +1,10 @@
 var Manipulator = (function() {
 
 	var create = function(img) {
+
+		// data is the object containing both the image information
+		// and all methods to manipulate that image. 'data' gets passed
+		// around in the 'resolve' function of the promise. 
 		var data = {};
 
 		data.append = function(display) {
@@ -15,8 +19,10 @@ var Manipulator = (function() {
 		}
 
 		data.redraw = function(pix) {
-			for (var x = 0; x < pix.length; x++) {
-				data.imgData.data[x] = pix[x];
+			if (pix) {
+				for (var x = 0; x < pix.length; x++) {
+					data.imgData.data[x] = ~~(pix[x]);
+				}
 			}
 			data.context.putImageData(data.imgData, 0, 0)
 		}
@@ -29,6 +35,107 @@ var Manipulator = (function() {
 			document.body.appendChild(img);
 		}
 
+		data.filter = {};
+
+		data.filter.simple = function(pix, func) {
+			_simpleLoop(pix, func);
+			data.redraw();
+		}
+
+		data.filter.opacity = function(percent, pixels) {
+			data.filter.simple(_defaultArray(pixels), function(r, g, b, a) {
+				return [r, g, b, a * (percent / 100)];
+			});
+		}
+		data.filter.invert = function(pixels) {
+			data.filter.simple(_defaultArray(pixels), function(r, g, b, a) {
+				return [255 - r, 255 - g, 255 - b, a];
+			});
+		}
+		data.filter.brighten = function(percent, pixels) {
+			data.filter.simple(_defaultArray(pixels), function(r, g, b, a) {
+				r = Math.min(255, r * (1 + percent / 100));
+				g = Math.min(255, g * (1 + percent / 100));
+				b = Math.min(255, b * (1 + percent / 100));
+				return [r, g, b, a];
+			});
+		}
+		data.filter.darken = function(percent, pixels) {
+			data.filter.simple(_defaultArray(pixels), function(r, g, b, a) {
+				r = Math.max(0, r * (1 - percent / 100));
+				g = Math.max(0, g * (1 - percent / 100));
+				b = Math.max(0, b * (1 - percent / 100));
+				return [r, g, b, a];
+			});
+		}
+		data.filter.threshold = function(value, pixels) {
+			data.filter.simple(_defaultArray(pixels), function(r, g, b, a) {
+				var v = (_grayValue(r, g, b) >= value) ? 255 : 0;
+				return [v, v, v, a];
+			});
+		}
+		data.filter.grayscale = function(pixels) {
+			data.filter.simple(_defaultArray(pixels), function(r, g, b, a) {
+				// CIE luminance for the RGB
+				// The human eye is bad at seeing red and blue, so we de-emphasize them.
+				// TIL: thanks HTML5rocks.com
+				var v = _grayValue(r, g, b);
+				return [v, v, v, a];
+			});
+		}
+		data.filter.convolute = function(weights, opaque) {
+			return _filterConvolute(_defaultArray(), weights, opaque)
+		};
+
+		data.filter.sharpen = function() {
+			data.redraw(data.filter.convolute([0, -1, 0, -1, 5, -1, 0, -1, 0]));
+		}
+
+		data.filter.blur = function() {
+			var n = 1 / 9;
+			data.redraw(data.filter.convolute([n, n, n, n, n, n, n, n, n]));
+		}
+
+		data.filter.sobel = function() {
+			var pixels = _defaultArray();
+			var grayscale = _shallowCopy(_defaultArray());
+			data.filter.grayscale(grayscale);
+
+			// Note that ImageData values are clamped between 0 and 255, so we need
+			// to use a Float32Array for the gradient values because they
+			// range between -255 and 255.
+			var vertical = _filterConvolute(grayscale, [-1, 0, 1, -2, 0, 2, -1, 0, 1]);
+			var horizontal = _filterConvolute(grayscale, [-1, -2, -1, 0, 0, 0, 1, 2, 1]);
+
+			console.log(vertical)
+			console.log(horizontal)
+			for (var i = 0; i < pixels.length; i += 4) {
+				// make the vertical gradient red
+				//console.log(vertical[i], horizontal[i])
+				if (vertical[i] > 0 && horizontal[i] > 0) {
+					pixels[i + 0] = 255;
+					pixels[i + 1] = 255;
+					pixels[i + 2] = 255;
+					pixels[i + 3] = 255;
+				} else {
+					pixels[i + 0] = 0;
+					pixels[i + 1] = 0;
+					pixels[i + 2] = 0;
+					pixels[i + 3] = 255;					
+				}
+				//var v = Math.abs(vertical[i]);
+				//pixels[i] = v;
+				// make the horizontal gradient green
+				//var h = Math.abs(horizontal[i]);
+				//pixels[i + 1] = h;
+				// and mix in some blue for aesthetics
+				//pixels[i + 2] = (v + h) / 4;
+				//pixels[i + 3] = 255; // opaque alpha
+			}
+
+			data.redraw();
+		}
+
 		data.smoothing = function(no, n, redraw) {
 			redraw = redraw || true;
 			n = n || 0;
@@ -37,7 +144,7 @@ var Manipulator = (function() {
 			for (var x = 0; x < data.width; x++) {
 				arr[x] = [];
 				for (var y = 0; y < data.height; y++) {
-					arr[x][y] = pixel(data.imgData.data, y * data.width * 4 + x * 4)
+					arr[x][y] = _pixel(data.imgData.data, y * data.width * 4 + x * 4)
 				}
 			}
 
@@ -93,7 +200,7 @@ var Manipulator = (function() {
 			redraw = redraw || true;
 			var arr = [];
 			for (var x = 0; x < data.imgData.data.length; x += 4) {
-				arr.push(pixel(data.imgData.data, x));
+				arr.push(_pixel(data.imgData.data, x));
 			}
 
 			var result = [];
@@ -101,7 +208,7 @@ var Manipulator = (function() {
 			var k = k || 16;
 			var regions = [];
 			var colors = colors || [];
-			var centroids = randomCentroids(arr, k, colors);
+			var centroids = _randomCentroids(arr, k, colors);
 
 			for (var c = 0; c < centroids.length; c++) {
 				regions.push({
@@ -118,7 +225,7 @@ var Manipulator = (function() {
 					var min = Infinity;
 					var col = null;
 					for (var co in regions) {
-						var dist = distance(regions[co].key, arr[x])
+						var dist = _distance(regions[co].key, arr[x])
 						if (dist <= min) {
 							min = dist;
 							col = co;
@@ -155,7 +262,7 @@ var Manipulator = (function() {
 
 				var total = 0;
 				for (var c2 in regions) {
-					if (equals(newRegion[c2].key, regions[c2].key)) {
+					if (_arrayEquals(newRegion[c2].key, regions[c2].key)) {
 						total++
 					}
 					//newRegion[c].arr = regions[c].arr.slice(0);
@@ -175,7 +282,7 @@ var Manipulator = (function() {
 				var min = Infinity;
 				var col = null;
 				for (var c4 in regions) {
-					var dist = distance(regions[c4].key, arr[x])
+					var dist = _distance(regions[c4].key, arr[x])
 					if (dist <= min) {
 						min = dist;
 						col = c4;
@@ -211,7 +318,7 @@ var Manipulator = (function() {
 				for (var cell = 0; cell < cells.length; cell++) {
 					var c = cells[cell];
 					var near = (c.cell[0] - (width * 4) < 0) ? c.cell[0] + 4 : c.cell[0] - (width * 4)
-					var prev = pixel(pix, near);
+					var prev = _pixel(pix, near);
 					for (var p in c.cell) {
 						pix[c.cell[p]] = prev[0];
 						pix[c.cell[p] + 1] = prev[1];
@@ -249,9 +356,9 @@ var Manipulator = (function() {
 					pix[c.edges[p]] = color[0];
 					pix[c.edges[p] + 1] = color[0];
 					pix[c.edges[p] + 2] = color[0];
+					pix[c.edges[p] + 3] = 255;
 				}
 			}
-
 
 			if (redraw === true) {
 				data.redraw(pix);
@@ -286,8 +393,8 @@ var Manipulator = (function() {
 				if (newCell === null) {
 					loop = false;
 				}
-				var co = coord(newCell, width)
-				var color = pixel(pix, newCell);
+				var co = _coordinate(newCell, width)
+				var color = _pixel(pix, newCell);
 				var r = data.floodFill(co.x, co.y, color[0], color[1], color[2]);
 				for (var x = 0; x < r.cell.length; x++) {
 					done[r.cell[x] / 4] = null;
@@ -416,9 +523,269 @@ var Manipulator = (function() {
 
 			});
 
-
-
 			return promise;
+		}
+
+
+
+		/*
+			internal functions
+		*/
+		function _defaultArray(pix) {
+			return (pix instanceof Array) ? pix : data.imgData.data;
+		}
+
+		function _filterConvolute(pixels, weights, opaque) {
+			var side = Math.round(Math.sqrt(weights.length));
+			var halfSide = Math.floor(side / 2);
+			var src = pixels;
+			var sw = data.width;
+			var sh = data.height;
+			// pad output by the convolution matrix
+			var w = sw;
+			var h = sh;
+			var dst = [];
+			// go through the destination image pixels
+			var alphaFac = opaque ? 1 : 0;
+			for (var y = 0; y < h; y++) {
+				for (var x = 0; x < w; x++) {
+					var sy = y;
+					var sx = x;
+					var dstOff = (y * w + x) * 4;
+					// calculate the weighed sum of the source image pixels that
+					// fall under the convolution matrix
+					var r = 0,
+						g = 0,
+						b = 0,
+						a = 0;
+					for (var cy = 0; cy < side; cy++) {
+						for (var cx = 0; cx < side; cx++) {
+							var scy = sy + cy - halfSide;
+							var scx = sx + cx - halfSide;
+							if (scy >= 0 && scy < sh && scx >= 0 && scx < sw) {
+								var srcOff = (scy * sw + scx) * 4;
+								var wt = weights[cy * side + cx];
+								r += src[srcOff] * wt;
+								g += src[srcOff + 1] * wt;
+								b += src[srcOff + 2] * wt;
+								a += src[srcOff + 3] * wt;
+							}
+						}
+					}
+					dst[dstOff] = r;
+					dst[dstOff + 1] = g;
+					dst[dstOff + 2] = b;
+					dst[dstOff + 3] = a + alphaFac * (255 - a);
+				}
+			}
+			return dst;
+		}
+
+		function _pixel(arr, s) {
+			return [arr[s], arr[s + 1], arr[s + 2], arr[s + 3]]
+		}
+
+		function _randomCentroids(arr, k, colors) {
+			var centroids = arr.slice(0); // copy
+			centroids.sort(function() {
+				return (Math.round(Math.random()) - 0.5);
+			});
+			var cent = centroids.slice(0, k - colors.length);
+			return cent.concat(colors);
+			//return centroids.slice(0, k);
+		}
+
+		//euclidian distance
+		function _distance(c1, c2) {
+			var dr = Math.abs(c1[0] - c2[0]);
+			var dg = Math.abs(c1[1] - c2[1]);
+			var db = Math.abs(c1[2] - c2[2]);
+			return Math.sqrt(dr * dr + dg * dg + db * db)
+		}
+
+
+		function _arrayEquals(array1, array2) {
+			// if the other array is a falsy value, return
+			if (!array1 || !array2)
+				return false;
+
+			// compare lengths - can save a lot of time 
+			if (array1.length != array2.length)
+				return false;
+
+			for (var i = 0, l = array1.length; i < l; i++) {
+				// Check if we have nested arrays
+				if (array1[i] instanceof Array && array2[i] instanceof Array) {
+					// recurse into the nested arrays
+					if (!array1[i]._arrayEquals(array2[i]))
+						return false;
+				} else if (array1[i] != array2[i]) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		function _simpleLoop(pix, func) {;
+			for (var x = 0; x < pix.length; x += 4) {
+				var c = func(pix[x + 0], pix[x + 1], pix[x + 2], pix[x + 3]);
+				pix[x + 0] = c[0]
+				pix[x + 1] = c[1]
+				pix[x + 2] = c[2]
+				pix[x + 3] = c[3]
+			}
+		}
+
+		function _coordinate(pos, width) {
+			var x = (pos / 4) % (width)
+			var c = {
+				x: x,
+				y: ((pos / 4) - x) / width
+			}
+			return c;
+		}
+
+		function _grayValue(r, g, b) {
+			return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+		}
+
+		function _shallowCopy(arr) {
+			var ret = [];
+			for (var x = 0; x < arr.length; x++) {
+				ret[x] = arr[x];
+			}
+			return ret;
+		}
+
+		function Promise(fn) {
+
+			/**
+				Private properties
+			*/
+			var _data;
+			var _deferred;
+			var _state = 'pending';
+			var _parentData;
+
+			/**
+				Private functions
+			*/
+			function _handle(handler) {
+				if (_state === 'pending') {
+					_deferred = handler;
+					return;
+				}
+
+				var handlerCallback = _getCallback(handler);
+
+				setTimeout(function() {
+					try {
+						if (!handlerCallback) {
+							_getPromiseFunction().call(this, _data);
+							return;
+						}
+
+						handler._resolve.call(this, handlerCallback(_data))
+					} catch (e) {
+						console.log(e)
+						if (handler._reject)
+							handler._reject.call(this, e);
+						else
+							throw e;
+					}
+				}, 1);
+
+			}
+
+			function _getCallback(handler) {
+				return (_state === 'resolved') ? handler.onResolve : handler.onReject;
+			}
+
+
+			function _getPromiseFunction(handler) {
+				return (_state === 'resolved') ? handler._resolve : handler._reject;
+			}
+
+			function _resolve(args) {
+				_set('resolved', args);
+			}
+
+			function _reject(args) {
+				_set('rejected', args);
+			}
+
+			function _set(status, args) {
+				_data = args;
+				_state = status;
+
+				if (_deferred)
+					_handle(_deferred);
+			}
+
+			/**
+				API, public interface
+			*/
+			this.status = function() {
+				return _state;
+			}
+
+			this.then = function(resolve, reject) {
+				// "res" is the internal _resolve function
+				// "resolve" is the function that'll be used
+				// on the values of the promise
+				//_parent = this;
+				var promise = new Promise(function(res, rej) {
+					_handle({
+						onResolve: resolve,
+						onReject: reject,
+						_resolve: res,
+						_reject: rej,
+					});
+				})
+
+				return promise;
+			}
+
+			this.catch = function(reject) {
+
+				return this.then(null, reject);
+			}
+
+			this.done = function(resolve, reject) {
+				this.then(resolve, reject);
+			}
+
+			/**
+				Kickstarting the promise
+			*/
+			fn(_resolve, _reject);
+		}
+
+		/**
+			Static methods
+		*/
+		Promise.all = function(promises) {
+			var count = promises.length;
+			var finished = 0;
+			var result = [];
+
+			return new Promise(function(resolve, reject) {
+				for (var p = 0; p < count; p++) {
+					promises[p].then(function(value) {
+						finished++;
+						result.push(value);
+						if (finished === count) {
+							try {
+								resolve(result)
+							} catch (e) {
+								reject(e);
+							}
+						}
+					}, function(err) {
+						console.log('Errors occured when calling "ALL"', err);
+					});
+				}
+			})
 		}
 
 		return new Manipulator(img);
@@ -426,197 +793,4 @@ var Manipulator = (function() {
 
 	return create;
 
-
-
-	/*
-		internal functions
-	*/
-	function pixel(arr, s) {
-		return [arr[s], arr[s + 1], arr[s + 2], arr[s + 3]]
-	}
-
-	function randomCentroids(arr, k, colors) {
-		var centroids = arr.slice(0); // copy
-		centroids.sort(function() {
-			return (Math.round(Math.random()) - 0.5);
-		});
-		var cent = centroids.slice(0, k - colors.length);
-		return cent.concat(colors);
-		//return centroids.slice(0, k);
-	}
-
-	//euclidian distance
-	function distance(c1, c2) {
-		var dr = Math.abs(c1[0] - c2[0]);
-		var dg = Math.abs(c1[1] - c2[1]);
-		var db = Math.abs(c1[2] - c2[2]);
-		return Math.sqrt(dr * dr + dg * dg + db * db)
-	}
-
-
-	function equals(array1, array2) {
-		// if the other array is a falsy value, return
-		if (!array1 || !array2)
-			return false;
-
-		// compare lengths - can save a lot of time 
-		if (array1.length != array2.length)
-			return false;
-
-		for (var i = 0, l = array1.length; i < l; i++) {
-			// Check if we have nested arrays
-			if (array1[i] instanceof Array && array2[i] instanceof Array) {
-				// recurse into the nested arrays
-				if (!array1[i].equals(array2[i]))
-					return false;
-			} else if (array1[i] != array2[i]) {
-				return false;
-			}
-		}
-		return true;
-	}
-
-	function coord(pos, width) {
-		var x = (pos / 4) % (width)
-		var c = {
-			x: x,
-			y: ((pos / 4) - x) / width
-		}
-		return c;
-	}
-
-	function Promise(fn) {
-
-		/**
-			Private properties
-		*/
-		var _data;
-		var _deferred;
-		var _state = 'pending';
-		var _parentData;
-
-		/**
-			Private functions
-		*/
-		function _handle(handler) {
-			if (_state === 'pending') {
-				_deferred = handler;
-				return;
-			}
-
-			var handlerCallback = _getCallback(handler);
-
-			setTimeout(function() {
-				try {
-					if (!handlerCallback) {
-						_getPromiseFunction().call(this, _data);
-						return;
-					}
-
-					handler._resolve.call(this, handlerCallback(_data))
-				} catch (e) {
-					console.log(e)
-					if (handler._reject)
-						handler._reject.call(this, e);
-					else
-						throw e;
-				}
-			}, 1);
-
-		}
-
-		function _getCallback(handler) {
-			return (_state === 'resolved') ? handler.onResolve : handler.onReject;
-		}
-
-
-		function _getPromiseFunction(handler) {
-			return (_state === 'resolved') ? handler._resolve : handler._reject;
-		}
-
-		function _resolve(args) {
-			_set('resolved', args);
-		}
-
-		function _reject(args) {
-			_set('rejected', args);
-		}
-
-		function _set(status, args) {
-			_data = args;
-			_state = status;
-
-			if (_deferred)
-				_handle(_deferred);
-		}
-
-		/**
-			API, public interface
-		*/
-		this.status = function() {
-			return _state;
-		}
-
-		this.then = function(resolve, reject) {
-			// "res" is the internal _resolve function
-			// "resolve" is the function that'll be used
-			// on the values of the promise
-			//_parent = this;
-			var promise = new Promise(function(res, rej) {
-				_handle({
-					onResolve: resolve,
-					onReject: reject,
-					_resolve: res,
-					_reject: rej,
-				});
-			})
-
-			return promise;
-		}
-
-		this.catch = function(reject) {
-
-			return this.then(null, reject);
-		}
-
-		this.done = function(resolve, reject) {
-			this.then(resolve, reject);
-		}
-
-		/**
-			Kickstarting the promise
-		*/
-		fn(_resolve, _reject);
-	}
-
-	/**
-		Static methods
-	*/
-	Promise.all = function(promises) {
-		var count = promises.length;
-		var finished = 0;
-		var result = [];
-
-		return new Promise(function(resolve, reject) {
-			for (var p = 0; p < count; p++) {
-				promises[p].then(function(value) {
-					finished++;
-					result.push(value);
-					if (finished === count) {
-						try {
-							resolve(result)
-						} catch (e) {
-							reject(e);
-						}
-					}
-				}, function(err) {
-					console.log('Errors occured when calling "ALL"', err);
-				});
-			}
-		})
-	}
-
-	return function get(img) {
-		return new Manipulator(img)
-	}
 })();
