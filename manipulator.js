@@ -5,6 +5,7 @@ var Manipulator = (function() {
 		// data is the object containing both the image information
 		// and all methods to manipulate that image. 'data' gets passed
 		// around in the 'resolve' function of the promise. 
+		var _staging = [];
 		var data = {};
 
 		data.append = function(display) {
@@ -19,15 +20,15 @@ var Manipulator = (function() {
 		}
 
 		data.redraw = function(pix) {
-			if (pix) {
-				for (var x = 0; x < pix.length; x++) {
-					data.imgData.data[x] = ~~(pix[x]);
-				}
+			pix = pix || _staging;
+			for (var x = 0; x < pix.length; x++) {
+				data.imgData.data[x] = ~~(pix[x]);
 			}
 			data.context.putImageData(data.imgData, 0, 0)
 		}
 
 		data.convert = function() {
+			data.redraw();
 			document.body.removeChild(data.canvas);
 			var image = data.canvas.toDataURL("image/png");
 			var img = document.createElement('img');
@@ -39,7 +40,6 @@ var Manipulator = (function() {
 
 		data.filter.simple = function(pix, func) {
 			_simpleLoop(pix, func);
-			data.redraw();
 		}
 
 		data.filter.opacity = function(percent, pixels) {
@@ -95,10 +95,12 @@ var Manipulator = (function() {
 			var n = 1 / 9;
 			data.redraw(data.filter.convolute([n, n, n, n, n, n, n, n, n]));
 		}
+
 		//todo: this sobel function is an edge detection. replace existing edge
 		//detection with this and make sobel function better suitable for actual
 		//sobel stuff. 
-		data.filter.sobel = function() {
+		data.filter.sobel = function(func, redraw) {
+			redraw = redraw || true;
 			var pixels = _defaultArray();
 			var grayscale = _shallowCopy(_defaultArray());
 			data.filter.grayscale(grayscale);
@@ -107,35 +109,45 @@ var Manipulator = (function() {
 			var horizontal = _filterConvoluteFloat(grayscale, [-1, -2, -1, 0, 0, 0, 1, 2, 1]);
 
 			for (var i = 0; i < pixels.length; i += 4) {
-				// make the vertical gradient red
-				var v = Math.abs(vertical[i]);
-				var h = Math.abs(horizontal[i]);
-				if(v>1 || h>1) {
-					pixels[i+0] = 255
-					pixels[i+1] = 255
-					pixels[i+2] = 255
-					pixels[i+3] = 255
-				} else {
-					//pixels[i+0] = 0
-					//pixels[i+1] = 0
-					//pixels[i+2] = 0
-					//pixels[i+3] = 255				
-				}
-
+				var pix = func(_pixel(pixels, i), _pixel(vertical, i), _pixel(horizontal, i));
+				pixels[i + 0] = pix[0];
+				pixels[i + 1] = pix[1];
+				pixels[i + 2] = pix[2];
+				pixels[i + 3] = pix[3];
 			}
 
-			data.redraw();
+			if(redraw) {
+				data.redraw();
+			}
 		}
 
-		data.smoothing = function(no, n, redraw) {
-			redraw = redraw || true;
+		data.edges = function(edgeColor, pixColor) {
+			data.filter.sobel(function(pixel, vertical, horizontal) {
+				var v = Math.abs(vertical[0]);
+				var h = Math.abs(horizontal[0]);
+				if (v > 0 || h > 0) {
+					pixel[0] = edgeColor[0]
+					pixel[1] = edgeColor[1]
+					pixel[2] = edgeColor[2]
+					pixel[3] = 255;
+				} else {
+					if (pixColor) {
+						pixel[0] = pixColor[0]
+						pixel[1] = pixColor[1]
+						pixel[2] = pixColor[2]
+					}
+				}
+				return pixel;
+			});
+		}
+
+		data.smoothing = function(no, n) {
 			n = n || 0;
 			var arr = [];
-			var result = [];
 			for (var x = 0; x < data.width; x++) {
 				arr[x] = [];
 				for (var y = 0; y < data.height; y++) {
-					arr[x][y] = _pixel(data.imgData.data, y * data.width * 4 + x * 4)
+					arr[x][y] = _pixel(_defaultArray(), y * data.width * 4 + x * 4)
 				}
 			}
 
@@ -173,25 +185,19 @@ var Manipulator = (function() {
 
 			for (var x = 0; x < data.width; x++) {
 				for (var y = 0; y < data.height; y++) {
-					result[y * data.width * 4 + x * 4 + 0] = arr[x][y][0]
-					result[y * data.width * 4 + x * 4 + 1] = arr[x][y][1]
-					result[y * data.width * 4 + x * 4 + 2] = arr[x][y][2]
-					result[y * data.width * 4 + x * 4 + 3] = arr[x][y][3]
+					_staging[y * data.width * 4 + x * 4 + 0] = arr[x][y][0]
+					_staging[y * data.width * 4 + x * 4 + 1] = arr[x][y][1]
+					_staging[y * data.width * 4 + x * 4 + 2] = arr[x][y][2]
+					_staging[y * data.width * 4 + x * 4 + 3] = arr[x][y][3]
 				}
 			}
-
-			if (redraw === true) {
-				data.redraw(result);
-			}
-
-			return result;
 		}
 
 		data.kmeans = function(k, colors, redraw) {
 			redraw = redraw || true;
 			var arr = [];
-			for (var x = 0; x < data.imgData.data.length; x += 4) {
-				arr.push(_pixel(data.imgData.data, x));
+			for (var x = 0; x < _staging.length; x += 4) {
+				arr.push(_pixel(_staging, x));
 			}
 
 			var result = [];
@@ -284,23 +290,16 @@ var Manipulator = (function() {
 				result[x * 4 + 1] = nc[1]
 				result[x * 4 + 2] = nc[2]
 				result[x * 4 + 3] = nc[3]
-					//arr[x] = regions[col].key;
 			}
 
-			if (redraw === true) {
-				data.redraw(result);
-			}
+			_staging = result;
 
-			return {
-				pixels: result,
-				regions: regions
-			}
+			return regions;
 
 		}
 
-		data.mergeCells = function(numberOfCellMerges, size, redraw) {
-			redraw = redraw || true;
-			var pix = data.imgData.data;
+		data.mergeCells = function(numberOfCellMerges, size) {
+			var pix = _staging;
 			var width = data.width;
 			for (var t = 0; t < numberOfCellMerges; t++) {
 				console.log('mergin cells pass');
@@ -321,60 +320,23 @@ var Manipulator = (function() {
 					}
 				}
 			}
-
-			if (redraw === true) {
-				data.redraw(pix);
-			}
-		}
-
-		data.edges = function(edgesOnly, color, redraw) {
-			color = color || [0, 0, 0];
-			redraw = redraw || true;
-			var pix = data.imgData.data;
-			//edges!
-			console.log('defining edges');
-			var cells = data.divideIntoCells();
-			for (var cell = 0; cell < cells.length; cell++) {
-				var c = cells[cell];
-				if (edgesOnly === true) {
-					for (var p in c.cell) {
-						pix[c.cell[p]] = 255;
-						pix[c.cell[p] + 1] = 255;
-						pix[c.cell[p] + 2] = 255;
-					}
-				}
-				for (var p in c.edges) {
-					pix[c.edges[p]] = color[0];
-					pix[c.edges[p] + 1] = color[0];
-					pix[c.edges[p] + 2] = color[0];
-					pix[c.edges[p] + 3] = 255;
-				}
-			}
-
-			if (redraw === true) {
-				data.redraw(pix);
-			}
-
 		}
 
 		data.divideIntoCells = function() {
-			var pix = data.imgData.data;
 			var width = data.width;
 			var height = data.height;
 			var arr = [];
 			var done = [];
-			for (var x in pix) {
-				arr[x] = pix[x];
-			}
+			var arr = _shallowCopy(_staging);
 
-			for (var x = 0; x < pix.length; x += 4) {
+			for (var x = 0; x < _staging.length; x += 4) {
 				done.push(x);
 			}
 			var cells = [];
 			var loop = true;
 			while (loop === true) {
 				var newCell = null;
-				for (var y = 0; y < pix.length / 4; y++) {
+				for (var y = 0; y < _staging.length / 4; y++) {
 					if (done[y] !== null) {
 						newCell = done[y];
 						break;
@@ -385,20 +347,18 @@ var Manipulator = (function() {
 					loop = false;
 				}
 				var co = _coordinate(newCell, width)
-				var color = _pixel(pix, newCell);
+				var color = _pixel(_staging, newCell);
 				var r = data.floodFill(co.x, co.y, color[0], color[1], color[2]);
-				for (var x = 0; x < r.cell.length; x++) {
-					done[r.cell[x] / 4] = null;
+				for (var x = 0; x < r.length; x++) {
+					done[r[x] / 4] = null;
 				}
 				cells.push({
-					len: r.cell.length,
-					cell: r.cell,
-					edges: r.edge,
+					len: r.length,
+					cell: r,
 					color: color
 				});
-				loop = !(r.cell.length === 0 || done.length === 0);
+				loop = !(r.length === 0 || done.length === 0);
 			}
-			//console.log('sort')
 			cells.sort(function(a, b) {
 				return (a.len === b.len) ? 0 : (a.len < b.len) ? -1 : 1
 			});
@@ -406,7 +366,6 @@ var Manipulator = (function() {
 		}
 
 		data.floodFill = function(startx, starty, startR, startG, startB) {
-			var pix = data.imgData.data;
 			var width = data.width;
 			var height = data.height;
 			var newPos;
@@ -419,7 +378,6 @@ var Manipulator = (function() {
 				[startx, starty]
 			];
 			var cell = [];
-			var edge = [];
 
 			while (pixelStack.length) {
 				var newPos, x, y, pixelPos, reachLeft, reachRight;
@@ -428,7 +386,6 @@ var Manipulator = (function() {
 				y = newPos[1];
 
 				pixelPos = (y * width + x) * 4;
-				edge.push(pixelPos)
 				while (y-- >= 0 && matchStartColor(pixelPos, startR, startG, startB)) {
 					pixelPos -= width * 4;
 				}
@@ -444,14 +401,10 @@ var Manipulator = (function() {
 								pixelStack.push([x - 1, y]);
 								reachLeft = true;
 							}
-						} else {
-							edge.push(pixelPos - 4);
-							if (reachLeft) {
-								reachLeft = false;
-							}
+						} else if (reachLeft) {
+							reachLeft = false;
+
 						}
-					} else if (x == 0) {
-						edge.push(pixelPos)
 					}
 
 					if (x < width - 1) {
@@ -460,30 +413,22 @@ var Manipulator = (function() {
 								pixelStack.push([x + 1, y]);
 								reachRight = true;
 							}
-						} else {
-							edge.push(pixelPos + 4);
-							if (reachRight) {
-								reachRight = false;
-							}
+						} else if (reachRight) {
+							reachRight = false;
+
 						}
-					} else if (x === width - 1) {
-						edge.push(pixelPos)
 					}
 
 					pixelPos += width * 4;
 				}
-				edge.push(pixelPos - width * 4)
 			}
 
-			return {
-				cell: cell,
-				edge: edge
-			}
+			return cell;
 
 			function matchStartColor(pixelPos, r, g, b) {
-				var r = pix[pixelPos];
-				var g = pix[pixelPos + 1];
-				var b = pix[pixelPos + 2];
+				var r = _staging[pixelPos];
+				var g = _staging[pixelPos + 1];
+				var b = _staging[pixelPos + 2];
 
 				return (r == startR && g == startG && b == startB);
 			}
@@ -507,6 +452,7 @@ var Manipulator = (function() {
 					data.canvas = _canvas;
 					data.context = _context;
 					data.imgData = _context.getImageData(0, 0, _canvas.width, _canvas.height)
+					_staging = _shallowCopy(data.imgData.data);
 					resolve(data);
 				}
 
@@ -523,7 +469,7 @@ var Manipulator = (function() {
 			internal functions
 		*/
 		function _defaultArray(pix) {
-			return (pix instanceof Array) ? pix : data.imgData.data;
+			return (pix instanceof Array) ? pix : _staging;
 		}
 
 		function _filterConvolute(pixels, weights, opaque) {
@@ -563,10 +509,10 @@ var Manipulator = (function() {
 							}
 						}
 					}
-					dst[dstOff] = r;
-					dst[dstOff + 1] = g;
-					dst[dstOff + 2] = b;
-					dst[dstOff + 3] = a + alphaFac * (255 - a);
+					dst[dstOff] = ~~r;
+					dst[dstOff + 1] = ~~g;
+					dst[dstOff + 2] = ~~b;
+					dst[dstOff + 3] = ~~(a + alphaFac * (255 - a));
 				}
 			}
 			return dst;
@@ -610,10 +556,10 @@ var Manipulator = (function() {
 							a += src[srcOff + 3] * wt;
 						}
 					}
-					dst[dstOff] = r;
-					dst[dstOff + 1] = g;
-					dst[dstOff + 2] = b;
-					dst[dstOff + 3] = a + alphaFac * (255 - a);
+					dst[dstOff] = ~~r;
+					dst[dstOff + 1] = ~~g;
+					dst[dstOff + 2] = ~~b;
+					dst[dstOff + 3] = ~~(a + alphaFac * (255 - a));
 				}
 			}
 			return dst;

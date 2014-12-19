@@ -16,7 +16,7 @@
 		<script src="manipulator.js"></script>
 		<script type="text/javascript">			
 
-			var manipulator = Manipulator('images/house.jpg');
+			var manipulator = Manipulator('test/house.jpg');
 
 			manipulator.then(function(image) {
 				image.append();
@@ -31,16 +31,11 @@
 				image.mergeCells(3, 70)
 				return image;
 			}).then(function(image) {
-				image.mergeCells(2, 100)
+				//image.mergeCells(2, 100)
 				return image;
 			}).then(function(image) {
 				image.filter.opacity(20)
-				
-				//image.edges(true, [0,0,0])
-				return image;
-			}).then(function(image) {
-				image.filter.sobel();
-				//image.filter.invert();
+				image.edges([0,0,0], [255,255,255])
 				return image;
 			}).done(function(image) {
 				image.convert();
