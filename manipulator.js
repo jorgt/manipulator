@@ -95,42 +95,41 @@ var Manipulator = (function() {
 			var n = 1 / 9;
 			data.redraw(data.filter.convolute([n, n, n, n, n, n, n, n, n]));
 		}
-
+		//todo: this sobel function is an edge detection. replace existing edge
+		//detection with this and make sobel function better suitable for actual
+		//sobel stuff. 
 		data.filter.sobel = function() {
 			var pixels = _defaultArray();
 			var grayscale = _shallowCopy(_defaultArray());
 			data.filter.grayscale(grayscale);
 
-			// Note that ImageData values are clamped between 0 and 255, so we need
-			// to use a Float32Array for the gradient values because they
-			// range between -255 and 255.
-			var vertical = _filterConvolute(grayscale, [-1, 0, 1, -2, 0, 2, -1, 0, 1]);
-			var horizontal = _filterConvolute(grayscale, [-1, -2, -1, 0, 0, 0, 1, 2, 1]);
+			var vertical = _filterConvoluteFloat(grayscale, [-1, 0, 1, -2, 0, 2, -1, 0, 1]);
+			var horizontal = _filterConvoluteFloat(grayscale, [-1, -2, -1, 0, 0, 0, 1, 2, 1]);
 
-			console.log(vertical)
-			console.log(horizontal)
 			for (var i = 0; i < pixels.length; i += 4) {
 				// make the vertical gradient red
-				//console.log(vertical[i], horizontal[i])
-				if (vertical[i] > 0 && horizontal[i] > 0) {
-					pixels[i + 0] = 255;
-					pixels[i + 1] = 255;
-					pixels[i + 2] = 255;
-					pixels[i + 3] = 255;
+				var v = Math.abs(vertical[i]);
+				var h = Math.abs(horizontal[i]);
+				if(v>1 || h>1) {
+					pixels[i+0] = 255
+					pixels[i+1] = 255
+					pixels[i+2] = 255
+					pixels[i+3] = 255
 				} else {
-					pixels[i + 0] = 0;
-					pixels[i + 1] = 0;
-					pixels[i + 2] = 0;
-					pixels[i + 3] = 255;					
+					//pixels[i+0] = 0
+					//pixels[i+1] = 0
+					//pixels[i+2] = 0
+					//pixels[i+3] = 255				
 				}
-				//var v = Math.abs(vertical[i]);
-				//pixels[i] = v;
+
+
+				//pixels[i] = (v>1)?255:0
 				// make the horizontal gradient green
-				//var h = Math.abs(horizontal[i]);
-				//pixels[i + 1] = h;
+				//pixels[i + 1] = (h>1)?255:0
 				// and mix in some blue for aesthetics
-				//pixels[i + 2] = (v + h) / 4;
+				//pixels[i + 2] = 0//(v + h) / 4;
 				//pixels[i + 3] = 255; // opaque alpha
+
 			}
 
 			data.redraw();
@@ -580,6 +579,53 @@ var Manipulator = (function() {
 			}
 			return dst;
 		}
+
+		if (!window.Float32Array)
+			Float32Array = Array;
+
+		function _filterConvoluteFloat(pixels, weights, opaque) {
+			var side = Math.round(Math.sqrt(weights.length));
+			var halfSide = Math.floor(side / 2);
+
+			var src = pixels;
+			var sw = data.width;
+			var sh = data.height;
+
+			var w = sw;
+			var h = sh;
+			var dst = new Float32Array(w * h * 4);
+
+			var alphaFac = opaque ? 1 : 0;
+
+			for (var y = 0; y < h; y++) {
+				for (var x = 0; x < w; x++) {
+					var sy = y;
+					var sx = x;
+					var dstOff = (y * w + x) * 4;
+					var r = 0,
+						g = 0,
+						b = 0,
+						a = 0;
+					for (var cy = 0; cy < side; cy++) {
+						for (var cx = 0; cx < side; cx++) {
+							var scy = Math.min(sh - 1, Math.max(0, sy + cy - halfSide));
+							var scx = Math.min(sw - 1, Math.max(0, sx + cx - halfSide));
+							var srcOff = (scy * sw + scx) * 4;
+							var wt = weights[cy * side + cx];
+							r += src[srcOff] * wt;
+							g += src[srcOff + 1] * wt;
+							b += src[srcOff + 2] * wt;
+							a += src[srcOff + 3] * wt;
+						}
+					}
+					dst[dstOff] = r;
+					dst[dstOff + 1] = g;
+					dst[dstOff + 2] = b;
+					dst[dstOff + 3] = a + alphaFac * (255 - a);
+				}
+			}
+			return dst;
+		};
 
 		function _pixel(arr, s) {
 			return [arr[s], arr[s + 1], arr[s + 2], arr[s + 3]]
