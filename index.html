@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en" ng-app="MealApp">
+	<head>
+		<title>Test</title>
+		<meta charset="utf-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+		<meta name="viewport" content="width=device-width,initial-scale=1" />
+		<style>
+			body {
+			  font-family: Sans-Serif;
+			}
+		</style>
+	</head>
+	<body>
+
+		<script src="manipulator.js"></script>
+		<script type="text/javascript">			
+
+			var manipulator = Manipulator('images/house.jpg');
+
+			manipulator.then(function(image) {
+				image.append();
+				return image;
+			}).then(function(image) {
+				image.kmeans(5);
+				return image;
+			}).then(function(image) {
+				image.smoothing(1, 0);
+				return image;
+			}).then(function(image) {
+				image.mergeCells(3, 70)
+				return image;
+			}).then(function(image) {
+				image.mergeCells(2, 100)
+				return image;
+			}).then(function(image) {
+				image.filter.opacity(20)
+				
+				//image.edges(true, [0,0,0])
+				return image;
+			}).then(function(image) {
+				image.filter.sobel();
+				//image.filter.invert();
+				return image;
+			}).done(function(image) {
+				image.convert();
+				console.log('... the end')
+			})
+	
+		</script>
+	</body>
+</html>

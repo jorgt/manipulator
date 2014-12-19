@@ -122,14 +122,6 @@ var Manipulator = (function() {
 					//pixels[i+3] = 255				
 				}
 
-
-				//pixels[i] = (v>1)?255:0
-				// make the horizontal gradient green
-				//pixels[i + 1] = (h>1)?255:0
-				// and mix in some blue for aesthetics
-				//pixels[i + 2] = 0//(v + h) / 4;
-				//pixels[i + 3] = 255; // opaque alpha
-
 			}
 
 			data.redraw();
