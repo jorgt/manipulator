@@ -9,6 +9,10 @@
 			body {
 			  font-family: Sans-Serif;
 			}
+			img {
+				display: block;
+				padding: 10px;
+			}
 		</style>
 	</head>
 	<body>
@@ -19,26 +23,33 @@
 			var manipulator = Manipulator('test/house.jpg');
 
 			manipulator.then(function(image) {
-				image.append();
 				return image;
 			}).then(function(image) {
 				image.kmeans(5);
 				return image;
 			}).then(function(image) {
+				//image.display();
+				return image;
+			}).then(function(image) {
 				image.smoothing(1, 0);
 				return image;
 			}).then(function(image) {
-				image.mergeCells(3, 70)
+				//image.display();
 				return image;
 			}).then(function(image) {
-				//image.mergeCells(2, 100)
+				//console.log('resize')
+				image.resize(150)
 				return image;
 			}).then(function(image) {
-				image.filter.opacity(20)
-				image.edges([0,0,0], [255,255,255])
+				//image.display();
+				return image;
+			}).then(function(image) {
+				//image.filter.opacity(15)
+				//image.edges([0,0,0])
 				return image;
 			}).done(function(image) {
-				image.convert();
+				//image.display();
+				//image.finalize();
 				console.log('... the end')
 			})
 	

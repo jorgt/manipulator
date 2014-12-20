@@ -1,128 +1,86 @@
 var Manipulator = (function() {
+	'use strict';
 
 	var create = function(img) {
 
-		// data is the object containing both the image information
-		// and all methods to manipulate that image. 'data' gets passed
+		// _data is the object containing both the image information
+		// and all methods to manipulate that image. '_data' gets passed
 		// around in the 'resolve' function of the promise. 
 		var _staging = [];
-		var data = {};
+		var _data = {};
 
-		data.append = function(display) {
-			document.body.appendChild(data.canvas)
+		/*
+			utility functions
+		*/
+		_data.append = function(display) {
+			document.body.appendChild(_data.canvas)
 			if (display === false) {
-				data.hide();
+				_data.hide();
 			}
 		}
 
-		data.hide = function() {
-			data.canvas.style.display = 'none'
+		_data.hide = function() {
+			_data.canvas.style.display = 'none'
 		}
 
-		data.redraw = function(pix) {
+		_data.redraw = function(pix) {
 			pix = pix || _staging;
 			for (var x = 0; x < pix.length; x++) {
-				data.imgData.data[x] = ~~(pix[x]);
+				_data.imgData.data[x] = ~~(pix[x]);
 			}
-			data.context.putImageData(data.imgData, 0, 0)
+			_data.context.putImageData(_data.imgData, 0, 0)
 		}
 
-		data.convert = function() {
-			data.redraw();
-			document.body.removeChild(data.canvas);
-			var image = data.canvas.toDataURL("image/png");
+		_data.resize = function(percent) {
+			_data.redraw();
+			var newWidth = ~~(_data.width * (percent / 100));
+			var newHeight = ~~(_data.height * (percent / 100));
+			var canvas = document.createElement('canvas');
+			var context = canvas.getContext('2d');
+			var imgData = canvas.createImageData(newWidth, newHeight);
+	
+			canvas.height = newHeight;
+			canvas.width = newWidth;
+
+			context.putImageData(_data.imgData, 0, 0, 0, 0, newWidth, newHeight);
+			document.body.appendChild(canvas);
+			_data.canvas = canvas;
+			_data.context = context;
+			_data.imgData = context.getImageData(0, 0, newWidth, newHeight)
+
+			console.log(_staging.length);
+			_staging = _shallowCopy(_data.imgData.data);
+			console.log(_staging.length)
+			_data.redraw(_staging);
+		}
+
+		_data.convertToImage = function() {
+			_data.redraw();
+			var image = _data.canvas.toDataURL("image/png");
 			var img = document.createElement('img');
 			img.src = image;
+			return img;
+		}
+
+		_data.display = function() {
+			var img = _data.convertToImage()
 			document.body.appendChild(img);
 		}
 
-		data.filter = {};
+		_data.finalize = function() {
+			_data.display();
+			try {
+				document.body.removeChild(_data.canvas);
+			} catch (e) {
 
-		data.filter.simple = function(pix, func) {
-			_simpleLoop(pix, func);
-		}
-
-		data.filter.opacity = function(percent, pixels) {
-			data.filter.simple(_defaultArray(pixels), function(r, g, b, a) {
-				return [r, g, b, a * (percent / 100)];
-			});
-		}
-		data.filter.invert = function(pixels) {
-			data.filter.simple(_defaultArray(pixels), function(r, g, b, a) {
-				return [255 - r, 255 - g, 255 - b, a];
-			});
-		}
-		data.filter.brighten = function(percent, pixels) {
-			data.filter.simple(_defaultArray(pixels), function(r, g, b, a) {
-				r = Math.min(255, r * (1 + percent / 100));
-				g = Math.min(255, g * (1 + percent / 100));
-				b = Math.min(255, b * (1 + percent / 100));
-				return [r, g, b, a];
-			});
-		}
-		data.filter.darken = function(percent, pixels) {
-			data.filter.simple(_defaultArray(pixels), function(r, g, b, a) {
-				r = Math.max(0, r * (1 - percent / 100));
-				g = Math.max(0, g * (1 - percent / 100));
-				b = Math.max(0, b * (1 - percent / 100));
-				return [r, g, b, a];
-			});
-		}
-		data.filter.threshold = function(value, pixels) {
-			data.filter.simple(_defaultArray(pixels), function(r, g, b, a) {
-				var v = (_grayValue(r, g, b) >= value) ? 255 : 0;
-				return [v, v, v, a];
-			});
-		}
-		data.filter.grayscale = function(pixels) {
-			data.filter.simple(_defaultArray(pixels), function(r, g, b, a) {
-				// CIE luminance for the RGB
-				// The human eye is bad at seeing red and blue, so we de-emphasize them.
-				// TIL: thanks HTML5rocks.com
-				var v = _grayValue(r, g, b);
-				return [v, v, v, a];
-			});
-		}
-		data.filter.convolute = function(weights, opaque) {
-			return _filterConvolute(_defaultArray(), weights, opaque)
-		};
-
-		data.filter.sharpen = function() {
-			data.redraw(data.filter.convolute([0, -1, 0, -1, 5, -1, 0, -1, 0]));
-		}
-
-		data.filter.blur = function() {
-			var n = 1 / 9;
-			data.redraw(data.filter.convolute([n, n, n, n, n, n, n, n, n]));
-		}
-
-		//todo: this sobel function is an edge detection. replace existing edge
-		//detection with this and make sobel function better suitable for actual
-		//sobel stuff. 
-		data.filter.sobel = function(func, redraw) {
-			redraw = redraw || true;
-			var pixels = _defaultArray();
-			var grayscale = _shallowCopy(_defaultArray());
-			data.filter.grayscale(grayscale);
-
-			var vertical = _filterConvoluteFloat(grayscale, [-1, 0, 1, -2, 0, 2, -1, 0, 1]);
-			var horizontal = _filterConvoluteFloat(grayscale, [-1, -2, -1, 0, 0, 0, 1, 2, 1]);
-
-			for (var i = 0; i < pixels.length; i += 4) {
-				var pix = func(_pixel(pixels, i), _pixel(vertical, i), _pixel(horizontal, i));
-				pixels[i + 0] = pix[0];
-				pixels[i + 1] = pix[1];
-				pixels[i + 2] = pix[2];
-				pixels[i + 3] = pix[3];
-			}
-
-			if(redraw) {
-				data.redraw();
 			}
 		}
 
-		data.edges = function(edgeColor, pixColor) {
-			data.filter.sobel(function(pixel, vertical, horizontal) {
+		/*
+			main functions
+		*/
+		_data.edges = function(edgeColor, pixColor) {
+			_data.filter.sobel(function(pixel, vertical, horizontal) {
 				var v = Math.abs(vertical[0]);
 				var h = Math.abs(horizontal[0]);
 				if (v > 0 || h > 0) {
@@ -141,21 +99,21 @@ var Manipulator = (function() {
 			});
 		}
 
-		data.smoothing = function(no, n) {
+		_data.smoothing = function(no, n) {
 			n = n || 0;
 			var arr = [];
-			for (var x = 0; x < data.width; x++) {
+			for (var x = 0; x < _data.width; x++) {
 				arr[x] = [];
-				for (var y = 0; y < data.height; y++) {
-					arr[x][y] = _pixel(_defaultArray(), y * data.width * 4 + x * 4)
+				for (var y = 0; y < _data.height; y++) {
+					arr[x][y] = _pixel(_defaultArray(), y * _data.width * 4 + x * 4)
 				}
 			}
 
 			var smooths = 0;
 			while (smooths++ < no) {
 				console.log('> smoothing pass')
-				for (x = 1; x < data.width - 1; x++) {
-					for (y = 1; y < data.height - 1; y++) {
+				for (x = 1; x < _data.width - 1; x++) {
+					for (y = 1; y < _data.height - 1; y++) {
 						var col = arr[x][y];
 						var counts = {};
 						var max = 0;
@@ -183,17 +141,17 @@ var Manipulator = (function() {
 				}
 			}
 
-			for (var x = 0; x < data.width; x++) {
-				for (var y = 0; y < data.height; y++) {
-					_staging[y * data.width * 4 + x * 4 + 0] = arr[x][y][0]
-					_staging[y * data.width * 4 + x * 4 + 1] = arr[x][y][1]
-					_staging[y * data.width * 4 + x * 4 + 2] = arr[x][y][2]
-					_staging[y * data.width * 4 + x * 4 + 3] = arr[x][y][3]
+			for (var x = 0; x < _data.width; x++) {
+				for (var y = 0; y < _data.height; y++) {
+					_staging[y * _data.width * 4 + x * 4 + 0] = arr[x][y][0]
+					_staging[y * _data.width * 4 + x * 4 + 1] = arr[x][y][1]
+					_staging[y * _data.width * 4 + x * 4 + 2] = arr[x][y][2]
+					_staging[y * _data.width * 4 + x * 4 + 3] = arr[x][y][3]
 				}
 			}
 		}
 
-		data.kmeans = function(k, colors, redraw) {
+		_data.kmeans = function(k, colors, redraw) {
 			redraw = redraw || true;
 			var arr = [];
 			for (var x = 0; x < _staging.length; x += 4) {
@@ -231,7 +189,7 @@ var Manipulator = (function() {
 					regions[col].arr.push(arr[x])
 				}
 
-				newRegion = [];
+				var newRegion = [];
 				for (var c1 in regions) {
 					var r = 0,
 						g = 0,
@@ -298,12 +256,12 @@ var Manipulator = (function() {
 
 		}
 
-		data.mergeCells = function(numberOfCellMerges, size) {
+		_data.mergeCells = function(numberOfCellMerges, size) {
 			var pix = _staging;
-			var width = data.width;
+			var width = _data.width;
 			for (var t = 0; t < numberOfCellMerges; t++) {
 				console.log('mergin cells pass');
-				var cells = data.divideIntoCells();
+				var cells = _data.divideIntoCells();
 				var total = cells.length;
 				for (var cell = 0; cell < cells.length; cell++) {
 					var c = cells[cell];
@@ -322,9 +280,9 @@ var Manipulator = (function() {
 			}
 		}
 
-		data.divideIntoCells = function() {
-			var width = data.width;
-			var height = data.height;
+		_data.divideIntoCells = function() {
+			var width = _data.width;
+			var height = _data.height;
 			var arr = [];
 			var done = [];
 			var arr = _shallowCopy(_staging);
@@ -348,7 +306,7 @@ var Manipulator = (function() {
 				}
 				var co = _coordinate(newCell, width)
 				var color = _pixel(_staging, newCell);
-				var r = data.floodFill(co.x, co.y, color[0], color[1], color[2]);
+				var r = _data.floodFill(co.x, co.y, color[0], color[1], color[2]);
 				for (var x = 0; x < r.length; x++) {
 					done[r[x] / 4] = null;
 				}
@@ -365,9 +323,9 @@ var Manipulator = (function() {
 			return cells;
 		}
 
-		data.floodFill = function(startx, starty, startR, startG, startB) {
-			var width = data.width;
-			var height = data.height;
+		_data.floodFill = function(startx, starty, startR, startG, startB) {
+			var width = _data.width;
+			var height = _data.height;
 			var newPos;
 			var x;
 			var y;
@@ -435,6 +393,100 @@ var Manipulator = (function() {
 		}
 
 
+		/*
+			filters
+		*/
+		_data.filter = {};
+
+		_data.filter.simple = function(pix, func) {
+			_simpleLoop(pix, func);
+		}
+
+		_data.filter.opacity = function(percent) {
+			_data.filter.simple(_defaultArray(pixels), function(r, g, b, a) {
+				return [r, g, b, a * (percent / 100)];
+			});
+		}
+
+		_data.filter.invert = function() {
+			_data.filter.simple(_defaultArray(), function(r, g, b, a) {
+				return [255 - r, 255 - g, 255 - b, a];
+			});
+		}
+
+		_data.filter.brighten = function(percent) {
+			_data.filter.simple(_defaultArray(), function(r, g, b, a) {
+				r = Math.min(255, r * (1 + percent / 100));
+				g = Math.min(255, g * (1 + percent / 100));
+				b = Math.min(255, b * (1 + percent / 100));
+				return [r, g, b, a];
+			});
+		}
+
+		_data.filter.darken = function(percent) {
+			_data.filter.simple(_defaultArray(), function(r, g, b, a) {
+				r = Math.max(0, r * (1 - percent / 100));
+				g = Math.max(0, g * (1 - percent / 100));
+				b = Math.max(0, b * (1 - percent / 100));
+				return [r, g, b, a];
+			});
+		}
+
+		_data.filter.threshold = function(value, pixels) {
+			_data.filter.simple(_defaultArray(pixels), function(r, g, b, a) {
+				var v = (_grayValue(r, g, b) >= value) ? 255 : 0;
+				return [v, v, v, a];
+			});
+		}
+
+		_data.filter.grayscale = function(pixels) {
+			_data.filter.simple(_defaultArray(pixels), function(r, g, b, a) {
+				// CIE luminance for the RGB
+				// The human eye is bad at seeing red and blue, so we de-emphasize them.
+				// TIL: thanks HTML5rocks.com
+				var v = _grayValue(r, g, b);
+				return [v, v, v, a];
+			});
+		}
+
+		_data.filter.convolute = function(weights, opaque) {
+			return _filterConvolute(_defaultArray(), weights, opaque)
+		};
+
+		_data.filter.sharpen = function() {
+			_data.redraw(_data.filter.convolute([0, -1, 0, -1, 5, -1, 0, -1, 0]));
+		}
+
+		_data.filter.blur = function() {
+			var n = 1 / 9;
+			_data.redraw(_data.filter.convolute([n, n, n, n, n, n, n, n, n]));
+		}
+
+		//todo: this sobel function is an edge detection. replace existing edge
+		//detection with this and make sobel function better suitable for actual
+		//sobel stuff. 
+		_data.filter.sobel = function(func, redraw) {
+			redraw = redraw || true;
+			var pixels = _defaultArray();
+			var grayscale = _shallowCopy(_defaultArray());
+			_data.filter.grayscale(grayscale);
+
+			var vertical = _filterConvoluteFloat(grayscale, [-1, 0, 1, -2, 0, 2, -1, 0, 1]);
+			var horizontal = _filterConvoluteFloat(grayscale, [-1, -2, -1, 0, 0, 0, 1, 2, 1]);
+
+			for (var i = 0; i < pixels.length; i += 4) {
+				var pix = func(_pixel(pixels, i), _pixel(vertical, i), _pixel(horizontal, i));
+				pixels[i + 0] = pix[0];
+				pixels[i + 1] = pix[1];
+				pixels[i + 2] = pix[2];
+				pixels[i + 3] = pix[3];
+			}
+
+			if (redraw) {
+				_data.redraw();
+			}
+		}
+
 		function Manipulator(img) {
 			var self = this;
 			var promise = new Promise(function(resolve, reject) {
@@ -447,13 +499,13 @@ var Manipulator = (function() {
 					_canvas.width = this.width;
 					_canvas.height = this.height;
 					_context.drawImage(_img, 0, 0);
-					data.width = this.width;
-					data.height = this.height;
-					data.canvas = _canvas;
-					data.context = _context;
-					data.imgData = _context.getImageData(0, 0, _canvas.width, _canvas.height)
-					_staging = _shallowCopy(data.imgData.data);
-					resolve(data);
+					_data.width = this.width;
+					_data.height = this.height;
+					_data.canvas = _canvas;
+					_data.context = _context;
+					_data.imgData = _context.getImageData(0, 0, _canvas.width, _canvas.height)
+					_staging = _shallowCopy(_data.imgData.data);
+					resolve(_data);
 				}
 
 				_img.src = img;
@@ -476,8 +528,8 @@ var Manipulator = (function() {
 			var side = Math.round(Math.sqrt(weights.length));
 			var halfSide = Math.floor(side / 2);
 			var src = pixels;
-			var sw = data.width;
-			var sh = data.height;
+			var sw = _data.width;
+			var sh = _data.height;
 			// pad output by the convolution matrix
 			var w = sw;
 			var h = sh;
@@ -526,8 +578,8 @@ var Manipulator = (function() {
 			var halfSide = Math.floor(side / 2);
 
 			var src = pixels;
-			var sw = data.width;
-			var sh = data.height;
+			var sw = _data.width;
+			var sh = _data.height;
 
 			var w = sw;
 			var h = sh;
@@ -646,10 +698,10 @@ var Manipulator = (function() {
 			/**
 				Private properties
 			*/
-			var _data;
+			var __data;
 			var _deferred;
 			var _state = 'pending';
-			var _parentData;
+			var _parent_data;
 
 			/**
 				Private functions
@@ -665,11 +717,11 @@ var Manipulator = (function() {
 				setTimeout(function() {
 					try {
 						if (!handlerCallback) {
-							_getPromiseFunction().call(this, _data);
+							_getPromiseFunction().call(this, __data);
 							return;
 						}
 
-						handler._resolve.call(this, handlerCallback(_data))
+						handler._resolve.call(this, handlerCallback(__data))
 					} catch (e) {
 						console.log(e)
 						if (handler._reject)
@@ -699,7 +751,7 @@ var Manipulator = (function() {
 			}
 
 			function _set(status, args) {
-				_data = args;
+				__data = args;
 				_state = status;
 
 				if (_deferred)
