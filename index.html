@@ -20,35 +20,38 @@
 		<script src="manipulator.js"></script>
 		<script type="text/javascript">			
 
-			var manipulator = Manipulator('test/house.jpg');
+			var manipulator = Manipulator('images/images-3.jpg');
 
 			manipulator.then(function(image) {
+				image.display();
 				return image;
 			}).then(function(image) {
-				image.kmeans(5);
+				image.kmeans(16);
 				return image;
 			}).then(function(image) {
-				//image.display();
+				image.display();
 				return image;
 			}).then(function(image) {
 				image.smoothing(1, 0);
 				return image;
 			}).then(function(image) {
-				//image.display();
+				image.display();
 				return image;
 			}).then(function(image) {
-				//console.log('resize')
-				image.resize(150)
+				image.mergeCells(3, 30);
+				//image.mergeCells(2, 75);
 				return image;
 			}).then(function(image) {
-				//image.display();
+				image.display();
 				return image;
 			}).then(function(image) {
-				//image.filter.opacity(15)
-				//image.edges([0,0,0])
+				image.resize(300);
+				//image.smoothing(1, 0)
+				image.display();
 				return image;
 			}).done(function(image) {
-				//image.display();
+				image.edges([0,0,0], [255,255,255])
+				image.display();
 				//image.finalize();
 				console.log('... the end')
 			})

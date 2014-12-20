@@ -32,26 +32,23 @@ var Manipulator = (function() {
 		}
 
 		_data.resize = function(percent) {
+			console.log('resizing to', percent, 'percent')
 			_data.redraw();
 			var newWidth = ~~(_data.width * (percent / 100));
 			var newHeight = ~~(_data.height * (percent / 100));
-			var canvas = document.createElement('canvas');
-			var context = canvas.getContext('2d');
-			var imgData = canvas.createImageData(newWidth, newHeight);
-	
-			canvas.height = newHeight;
-			canvas.width = newWidth;
 
-			context.putImageData(_data.imgData, 0, 0, 0, 0, newWidth, newHeight);
-			document.body.appendChild(canvas);
-			_data.canvas = canvas;
-			_data.context = context;
-			_data.imgData = context.getImageData(0, 0, newWidth, newHeight)
+			//var canvas = document.getElementById("cc");
+			//var ctx = canvas.getContext("2d");
+			var canvas = _data.canvas;
 
-			console.log(_staging.length);
+			var newCanvas = _resampleHermite(canvas, _data.width, _data.height, newWidth, newHeight);
+
+			_data.canvas = newCanvas;
+			_data.context = newCanvas.getContext('2d');
+			_data.height = newHeight;
+			_data.width = newWidth;
+			_data.imgData = _data.context.getImageData(0, 0, newWidth, newHeight)
 			_staging = _shallowCopy(_data.imgData.data);
-			console.log(_staging.length)
-			_data.redraw(_staging);
 		}
 
 		_data.convertToImage = function() {
@@ -403,7 +400,7 @@ var Manipulator = (function() {
 		}
 
 		_data.filter.opacity = function(percent) {
-			_data.filter.simple(_defaultArray(pixels), function(r, g, b, a) {
+			_data.filter.simple(_defaultArray(), function(r, g, b, a) {
 				return [r, g, b, a * (percent / 100)];
 			});
 		}
@@ -616,6 +613,69 @@ var Manipulator = (function() {
 			}
 			return dst;
 		};
+
+
+		function _resampleHermite(canvas, W, H, W2, H2) {
+			W2 = Math.round(W2);
+			H2 = Math.round(H2);
+			var img = canvas.getContext("2d").getImageData(0, 0, W, H);
+			var img2 = canvas.getContext("2d").getImageData(0, 0, W2, H2);
+			var data = img.data;
+			var data2 = img2.data;
+			var ratio_w = W / W2;
+			var ratio_h = H / H2;
+			var ratio_w_half = Math.ceil(ratio_w / 2);
+			var ratio_h_half = Math.ceil(ratio_h / 2);
+
+			for (var j = 0; j < H2; j++) {
+				for (var i = 0; i < W2; i++) {
+					var x2 = (i + j * W2) * 4;
+					var weight = 0;
+					var weights = 0;
+					var weights_alpha = 0;
+					var gx_r = 0;
+					var gx_g = 0;
+					var gx_b = 0
+					var gx_a = 0;
+					var center_y = (j + 0.5) * ratio_h;
+					for (var yy = Math.floor(j * ratio_h); yy < (j + 1) * ratio_h; yy++) {
+						var dy = Math.abs(center_y - (yy + 0.5)) / ratio_h_half;
+						var center_x = (i + 0.5) * ratio_w;
+						var w0 = dy * dy //pre-calc part of w
+						for (var xx = Math.floor(i * ratio_w); xx < (i + 1) * ratio_w; xx++) {
+							var dx = Math.abs(center_x - (xx + 0.5)) / ratio_w_half;
+							var w = Math.sqrt(w0 + dx * dx);
+							if (w >= -1 && w <= 1) {
+								//hermite filter
+								weight = 2 * w * w * w - 3 * w * w + 1;
+								if (weight > 0) {
+									dx = 4 * (xx + yy * W);
+									//alpha
+									gx_a += weight * data[dx + 3];
+									weights_alpha += weight;
+									//colors
+									if (data[dx + 3] < 255)
+										weight = weight * data[dx + 3] / 250;
+									gx_r += weight * data[dx];
+									gx_g += weight * data[dx + 1];
+									gx_b += weight * data[dx + 2];
+									weights += weight;
+								}
+							}
+						}
+					}
+					data2[x2] = gx_r / weights;
+					data2[x2 + 1] = gx_g / weights;
+					data2[x2 + 2] = gx_b / weights;
+					data2[x2 + 3] = gx_a / weights_alpha;
+				}
+			}
+			canvas.getContext("2d").clearRect(0, 0, Math.max(W, W2), Math.max(H, H2));
+			canvas.width = W2;
+			canvas.height = H2;
+			canvas.getContext("2d").putImageData(img2, 0, 0);
+			return canvas;
+		}
 
 		function _pixel(arr, s) {
 			return [arr[s], arr[s + 1], arr[s + 2], arr[s + 3]]
