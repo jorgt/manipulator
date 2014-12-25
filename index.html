@@ -20,7 +20,7 @@
 		<script src="manipulator.js"></script>
 		<script type="text/javascript">			
 
-			var manipulator = Manipulator('images/images-3.jpg');
+			var manipulator = Manipulator('test/house.jpg');
 
 			manipulator.then(function(image) {
 				image.display();
@@ -42,11 +42,13 @@
 				//image.mergeCells(2, 75);
 				return image;
 			}).then(function(image) {
+				image.resize(200);
+				image.smoothing(1,0);
 				image.display();
 				return image;
 			}).then(function(image) {
-				image.resize(300);
-				//image.smoothing(1, 0)
+				image.resize(200);
+				image.smoothing(1, 0)
 				image.display();
 				return image;
 			}).done(function(image) {
