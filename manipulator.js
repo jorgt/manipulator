@@ -62,7 +62,8 @@ var Manipulator = (function() {
 
 		_data.display = function() {
 			var img = _data.convertToImage()
-			document.body.appendChild(img);
+			elem = elem || document.body;
+			elem.appendChild(_data.canvas)
 		}
 
 		_data.finalize = function() {
