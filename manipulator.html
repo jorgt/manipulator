@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <link href='https://fonts.googleapis.com/css?family=Roboto+Mono:400,300,500,700|Ubuntu:400,300,300italic,500,700|Montserrat' rel='stylesheet' type='text/css'>
+    <style>
+    	html, body {
+            font-family: Ubuntu;
+            font-weight: lighter;
+    	}
+    </style>
+    </head>
+    <body>
+        <h2>These are some of the more basic filters</h2>
+        <p>
+            Most of these have percentages attached to this, this is to demonstrate the effect
+        </p>
+        <input id="filter" type="button" onclick="restore()" value="restore"/>
+        <input id="filter" type="button" onclick="brighten()" value="brigten"/>
+        <input id="filter" type="button" onclick="darken()" value="darken"/>
+        <input id="filter" type="button" onclick="invert()" value="invert"/>
+        <input id="filter" type="button" onclick="grayscale()" value="grayscale"/>
+        <input id="filter" type="button" onclick="opacity()" value="opacity"/>
+        <div id="filters"></div>
+
+        <h2>These are some of the more advanced features</h2>
+    	<input id="button" type="button" onclick="execute(this)" value="k-means"/>
+    	<div id="results"></div>
+
+    	<script src="https://rawgithub.com/jorgt/manipulator/master/manipulator.js"></script>
+		<script type="text/javascript">
+        
+            var filter = Manipulator('house.jpg');
+            var filters = document.getElementById('filters');
+
+            restore();
+
+            function restore() {
+                filter = Manipulator('house.jpg');
+                filter.then(function(image) {
+                    filters.innerHTML = '';
+                    image.display(filters);
+                });
+            }
+
+            function brighten() {
+                filter.then(function(image) {
+                    image.filter.brighten(30);
+                    return image;
+                }).then(function(image) {
+                    image.display(filters);
+                });
+            }
+
+            function darken() {
+               filter.then(function(image) {
+                    image.filter.darken(30);
+                    return image;
+                }).then(function(image) {
+                    image.display(filters);
+                });
+            }
+
+            function invert() {
+               filter.then(function(image) {
+                    image.filter.invert();
+                    return image;
+                }).then(function(image) {
+                    image.display(filters);
+                });                
+            }
+
+            function grayscale() {
+               filter.then(function(image) {
+                    image.filter.grayscale();
+                    return image;
+                }).then(function(image) {
+                    image.display(filters);
+                });                
+            }
+
+            function opacity() {
+               filter.then(function(image) {
+                    image.filter.opacity(30);
+                    return image;
+                }).then(function(image) {
+                    image.display(filters);
+                });                
+            }
+
+            
+            var manipulator = Manipulator('house.jpg');
+            var spinner = document.createElement('p');
+            var results = document.getElementById('results');
+            var button = document.getElementById('button');
+
+            results.appendChild(spinner);
+
+            manipulator.then(function(image) {
+                image.display(results);
+                return image;
+            });
+
+            function execute(btn) {
+                switch(btn.value) {
+                    case 'k-means':
+                        kmeans();
+                    break;
+                    case 'Smooth it over':
+                        smooth1();
+                    break;
+                    case 'Merge smaller cells':
+                        merge1();
+                    break;
+                    case 'Show edges':
+                        edges();
+                    break;
+                }
+            }
+
+            function kmeans() {
+                spinner.innerHTML = 'Executing k-means. Check the console for more output. This is reasonably slow.';
+                setTimeout(function() {
+                    manipulator.then(function(image) {
+                        image.kmeans(16);
+                        image.display(results);
+                        spinner.innerHTML = 'This brought the image down to 16 median colors.'
+                        button.value = 'Smooth it over';
+                        return image;
+                    });
+                }, 100);                
+            }
+
+            function smooth1() {
+                spinner.innerHTML = 'Smoothing lines. Check the console for more output';
+                setTimeout(function() {
+                    manipulator.then(function(image) {
+                        image.smoothing(1, 0);
+                        image.display(results);
+                        spinner.innerHTML = 'This smoothed over the edges.'
+                        button.value = 'Merge smaller cells';
+                        return image;
+                    });
+                }, 100);                
+            }
+
+            function merge1() {
+                spinner.innerHTML = 'Merges smaller cells. Check the console for more output';
+                setTimeout(function() {
+                    manipulator.then(function(image) {
+                        image.mergeCells(3, 30);
+                        image.display(results);
+                        spinner.innerHTML = 'This merged cells under a particular number of pixels into larger neighbors.'
+                        button.value = 'Show edges';
+                        return image;
+                    });
+                }, 100);                
+            }
+
+            function edges() {
+                spinner.innerHTML = 'Determining edges. Check the console for more output';
+                setTimeout(function() {
+                    manipulator.then(function(image) {
+                        image.edges([255,255,255])
+                        image.display(results);
+                        spinner.innerHTML = 'This did a flood fill to find the edges of every cell.'
+                        button.value = 'Done';
+                        return image;
+                    });
+                }, 100);                
+            }
+
+      		</script>
+    </body>
+</html>
