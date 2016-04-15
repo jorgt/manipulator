@@ -12,8 +12,9 @@ var Manipulator = (function() {
 		/*
 			utility functions
 		*/
-		_data.append = function(display) {
-			document.body.appendChild(_data.canvas)
+		_data.append = function(display, elem) {
+			elem = elem || document.body;
+			elem.appendChild(_data.canvas)
 			if (display === false) {
 				_data.hide();
 			}
