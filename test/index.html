@@ -14,36 +14,55 @@
 	<body>
 
 		<script src="manipulator.js"></script>
-		<script type="text/javascript">			
 
-			var manipulator = Manipulator('house.jpg');
+		<script type="text/javascript">		
 
-			manipulator.then(function(image) {
-				image.append();
-				return image;
-			}).then(function(image) {
-				image.kmeans(10);
-				return image;
-			}).then(function(image) {
-				image.smoothing(1, 0);
-				return image;
-			}).then(function(image) {
-				image.mergeCells(3, 70)
-				return image;
-			}).then(function(image) {
-				//image.mergeCells(2, 100)
-				return image;
-			}).then(function(image) {
-				image.edges(true, [0,0,0])
-				return image;
-			}).then(function(image) {
-				//image.smoothing(1, 6)
-				return image;
-			}).done(function(image) {
-				image.convert();
-				console.log('... the end')
-			})
-	
+
+
+			var canvas = document.createElement('canvas');
+			var context = canvas.getContext('2d');
+			var img = document.createElement('img');
+			var opt = {};
+
+			img.onload = function() {
+				var h = this.height;
+				var w = this.width;
+				canvas.width = this.width * 1.5;
+				canvas.height = this.height * 1.5;
+				context.drawImage(img, 0, 0, w, h);
+
+				var imgData = context.getImageData(0, 0, w, h);
+				var myWorker = new Worker("worker.js");		
+
+				myWorker.onmessage = function (oEvent) {
+				  	for(var i in oEvent.data) {
+				  		imgData.data[i] = oEvent.data[i];
+				  	}
+				  	context.putImageData(imgData, 0, 0);
+
+				  	//resize it here
+					context.drawImage(canvas, 0, 0, w,    h,    // source rectangle
+					                          0, 0, w * 1.5, h *1.5)  // destination rectangle
+					//canvas.width = w * 2;
+				  	//canvas.height = h * 2;
+				};
+
+				opt = {
+					data: imgData.data,
+					width: this.width,
+					height: this.height,
+					kmeans: 24,
+					smoothing: [1, 0],
+					merge: [2, 30]
+				};
+
+				myWorker.postMessage(opt);
+			}
+
+			img.src = 'dog2.jpg';
+
+			document.body.appendChild(canvas);
+		
 		</script>
 	</body>
 </html>
